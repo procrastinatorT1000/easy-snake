@@ -43,14 +43,14 @@ void fill_table()
 void print_table()
 {
     system("clear");
-    for( int i=0; i < Y_STRS; i++ )
+    for( int y=0; y <= Y_STRS; y++ )
     {
-        for( int j=0; j < X_COLS; j++ )
+        for( int x=0; x <= X_COLS; x++ )
         {
-            if( i == 0 || i == Y_STRS-1 || j == 0 || j == X_COLS-1 )
+            if( y == 0 || y == Y_STRS || x == 0 || x == X_COLS )
                 printf("#");
             else
-                printf( "%c", tbl[j][i] );
+                printf( "%c", tbl[x][y] );
 
         }
         printf("\n");
