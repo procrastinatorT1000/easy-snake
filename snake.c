@@ -15,6 +15,8 @@
 #define NB_DISABLE 0
 #define NB_ENABLE 1
 
+#define msleep(x) usleep(x*1000) /* sleep in microseconds */
+
 /*  coord_x[TBL_SZ], coord_y[TBL_SZ] - arrays contains coordinates of
     snakes elements. head of snake located in coord_x[1], coord_y[1]
     dir_x, dir_y is direction of snake moving
@@ -27,12 +29,23 @@ int dir_x, dir_y;
 
 //snake_len - number of snake elements
 //tbl[TBL_SZ][TBL_SZ] - game state mapping table
-int snale_len = 2;
+int snake_len = 2;
 char tbl[TBL_SZ][TBL_SZ] = {0};
 
-
+/*  Used to read key just when it pressed
+    to not block main routine */
+int kbhit() {
+  struct timeval tv;
+  fd_set fds;
+  tv.tv_sec = 0;
+  tv.tv_usec = 0;
+  FD_ZERO(&fds);
+  FD_SET(STDIN_FILENO, &fds);
+  select(STDIN_FILENO+1, &fds, NULL, NULL, &tv);
+  return FD_ISSET(STDIN_FILENO, &fds);
+}
 /*  Configurate system to get key without
-    blocking, not wait */
+    blocking, do not wait Enter to get key */
 void nonblock(int state) {
   struct termios ttystate;
 
@@ -58,9 +71,10 @@ void init_game()
     memset( coord_x, 0, sizeof(coord_x) );
     memset( coord_y, 0, sizeof(coord_y) );
 
-    snale_len = 2;
-    coord_x[1] = 3; coord_x[2] = 2; /* Initial position of snake */
+    snake_len = 3;
+    coord_x[1] = 4; coord_x[2] = 3; /* Initial position of snake */
     coord_y[1] = 2; coord_y[2] = 2;
+    coord_x[3] = 2; coord_y[3] = 2;
 
     dir_x = 1;
     dir_y = 0;
@@ -73,6 +87,32 @@ void deinit_game()
     nonblock(NB_DISABLE);
 }
 
+/*  */
+void move_snake()
+{
+    for(int i = snake_len; i >= 2; --i)
+    {
+        coord_x[i] = coord_x[i-1];
+        coord_y[i] = coord_y[i-1];
+    }
+
+    coord_x[1] += dir_x;
+    coord_y[1] += dir_y;
+
+    if( coord_x[1] < 1 )
+        coord_x[1] = X_COLS-1;
+
+    if( coord_x[1] > X_COLS-1 )
+        coord_x[1] = 1;
+
+    if( coord_y[1] < 1 )
+        coord_y[1] = Y_STRS-1;
+
+    if( coord_y[1] > Y_STRS-1 )
+        coord_y[1] = 1;
+
+
+}
 
 void change_direction()
 {
@@ -105,7 +145,7 @@ void change_direction()
             }
             break;
         case 'q':
-            nonblock(NB_DISABLE);
+            deinit_game();
             exit(0);
             break;
         
@@ -115,13 +155,32 @@ void change_direction()
 void fill_table()
 {
     char blank = ' ';
+    char head = '>';
     char snake = '@';
     memset(tbl, blank, sizeof(tbl));
 
-    for(int i = 1; i <= snale_len; i++)
+    if(dir_x == 1)  /* head RIGHT */
     {
-        for(int j = 1; j <= snale_len; j++)
-            tbl[coord_x[i]][coord_y[j]] = snake;
+        head = '>';
+    }
+    else if(dir_x == -1)  /* head LEFT */
+    {
+        head = '<';
+    }
+    else if(dir_y == 1)  /* head DOWN */
+    {
+        head = 'v';
+    }
+    else if(dir_y == -1)  /* head UP */
+    {
+        head = '^';
+    }
+
+    tbl[coord_x[1]][coord_y[1]] = head;
+
+    for(int i = 2; i <= snake_len; i++)
+    {
+        tbl[coord_x[i]][coord_y[i]] = snake;
     }
 }
 
@@ -147,13 +206,23 @@ int main()
 {
     init_game();
 
+    int count = 0;
+
     while(1)
     {
         fill_table();
 
         print_table();
 
-        change_direction();
+        /* handle key if it was pressed */
+        if( kbhit() )
+            change_direction();
+
+        printf( "c: %d, x: %d, y: %d, len: %d\n", count++, dir_x, dir_y, snake_len );
+
+        move_snake();
+
+        msleep(200);
     }
 
     return 0;
