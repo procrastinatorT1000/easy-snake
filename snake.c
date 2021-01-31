@@ -4,6 +4,7 @@
 #include <curses.h>
 #include <termios.h>
 #include <unistd.h>
+#include <time.h>
 
 
 
@@ -26,14 +27,17 @@
     dir_x =  0, dir_y =-1 moves to UP */
 int coord_x[TBL_SZ], coord_y[TBL_SZ];
 int dir_x, dir_y;
+/*  food coordinates */
+int food_x, food_y;
 
 //snake_len - number of snake elements
 //tbl[TBL_SZ][TBL_SZ] - game state mapping table
 int snake_len = 2;
+int score     = 0;
 char tbl[TBL_SZ][TBL_SZ] = {0};
 
 /*  Used to read key just when it pressed
-    to not block main routine */
+    to not block main routine while key isn't pressed */
 int kbhit() {
   struct timeval tv;
   fd_set fds;
@@ -71,13 +75,19 @@ void init_game()
     memset( coord_x, 0, sizeof(coord_x) );
     memset( coord_y, 0, sizeof(coord_y) );
 
-    snake_len = 3;
+    snake_len = 2;
+    score = 0;
     coord_x[1] = 4; coord_x[2] = 3; /* Initial position of snake */
     coord_y[1] = 2; coord_y[2] = 2;
-    coord_x[3] = 2; coord_y[3] = 2;
 
     dir_x = 1;
     dir_y = 0;
+
+    food_x = -1;
+    food_y = -1;
+
+    /* config rand() to be more random */
+    srand((unsigned)time(NULL));
 
     nonblock(NB_ENABLE);
 }
@@ -85,6 +95,19 @@ void init_game()
 void deinit_game()
 {
     nonblock(NB_DISABLE);
+}
+
+void print_score()
+{
+    printf( "SCORE: %d\n", score );
+}
+
+void game_over()
+{
+    deinit_game();
+    print_score();
+    printf( "<<<YOU LOOSE!>>>\n" );
+    exit(0);
 }
 
 /*  */
@@ -111,7 +134,27 @@ void move_snake()
     if( coord_y[1] > Y_STRS-1 )
         coord_y[1] = 1;
 
+    /* check that the snake not eats itself */
+    for( int i = 2; i <=snake_len; i++ )
+    {
+        if( coord_x[1] == coord_x[i] &&
+            coord_y[1] == coord_y[i] )
+        {
+            game_over();
+        }
+    }
+}
 
+void try_to_eat()
+{
+    /* if head == food */
+    if( coord_x[1] == food_x &&
+        coord_y[1] == food_y )
+    {
+        food_x = -1; food_y = -1; /* food was eaten */
+        snake_len++;
+        score++;
+    }
 }
 
 void change_direction()
@@ -152,10 +195,56 @@ void change_direction()
     }
 }
 
+int get_rand_X()
+{
+    int crd = rand() % X_COLS;
+        if( crd == 0 )
+            crd = 1;
+    return crd;
+}
+
+int get_rand_Y()
+{
+    int crd = rand() % Y_STRS;
+        if( crd == 0 )
+            crd = 1;
+    return crd;
+}
+
+void place_food()
+{
+    /* if food eaten, place new */
+    if( food_x == -1 || food_y == -1 )
+    {
+        food_x = get_rand_X();
+        food_y = get_rand_Y();
+
+        /* check that food isn't on snake */
+        for( int i = 1, c = 0; i <=snake_len; i++, c++ )
+        {
+            if( food_x == coord_x[i] &&
+                food_y == coord_y[i] )
+            {
+                food_x = get_rand_X();
+                food_y = get_rand_Y();
+                i = 1; /* check coordinates from snake head */
+
+                /* protection from infinite loop */
+                if( c >= TBL_SZ )
+                {
+                    printf( "That's all, folks ¯\\_(ツ)_/¯\n");
+                    exit(1);
+                }
+            }
+        }
+    }
+}
+
 void fill_table()
 {
     char blank = ' ';
     char head = '>';
+    char food = '*';
     char snake = '@';
     memset(tbl, blank, sizeof(tbl));
 
@@ -176,12 +265,14 @@ void fill_table()
         head = '^';
     }
 
-    tbl[coord_x[1]][coord_y[1]] = head;
-
     for(int i = 2; i <= snake_len; i++)
     {
         tbl[coord_x[i]][coord_y[i]] = snake;
     }
+
+    tbl[food_x][food_y] = food;
+
+    tbl[coord_x[1]][coord_y[1]] = head;
 }
 
 void print_table()
@@ -210,6 +301,8 @@ int main()
 
     while(1)
     {
+        place_food();
+
         fill_table();
 
         print_table();
@@ -218,9 +311,11 @@ int main()
         if( kbhit() )
             change_direction();
 
-        printf( "c: %d, x: %d, y: %d, len: %d\n", count++, dir_x, dir_y, snake_len );
-
         move_snake();
+
+        try_to_eat();
+
+        print_score();
 
         msleep(200);
     }
