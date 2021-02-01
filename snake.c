@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <curses.h>
-#include <termios.h>
+#include <termios.h> /* nonblock() */
 #include <unistd.h>
 #include <time.h>
 
@@ -16,6 +16,9 @@
 #define NB_DISABLE 0
 #define NB_ENABLE 1
 
+#define MAX_DELAY_MS    200       /* Delay for easy level */
+#define MIN_DELAY_MS    50        /* Delay for hard level */
+#define SPEED_STEP      10        /* How many delay changes when snake eat food */
 #define msleep(x) usleep(x*1000) /* sleep in microseconds */
 
 /*  coord_x[TBL_SZ], coord_y[TBL_SZ] - arrays contains coordinates of
@@ -35,6 +38,21 @@ int food_x, food_y;
 int snake_len = 2;
 int score     = 0;
 char tbl[TBL_SZ][TBL_SZ] = {0};
+
+/* Snake step time */
+int delay_ms = 200;
+int speed    = 0;
+int is_speed_constant = 0;  /* if false, then increment speed before HARD lvl */
+
+/* Speed up snake, faster, higher, stronger */
+void speed_up()
+{
+    if(!is_speed_constant && delay_ms > MIN_DELAY_MS)
+    {
+        speed++;
+        delay_ms = MAX_DELAY_MS - speed*SPEED_STEP;
+    }
+}
 
 /*  Used to read key just when it pressed
     to not block main routine while key isn't pressed */
@@ -69,11 +87,34 @@ void nonblock(int state) {
   tcsetattr(STDIN_FILENO, TCSANOW, &ttystate);
 }
 
-void init_game()
+void init_game( int mode )
 {
     memset( tbl, 0, sizeof(tbl) );
     memset( coord_x, 0, sizeof(coord_x) );
     memset( coord_y, 0, sizeof(coord_y) );
+
+    switch( mode )
+    {
+        case 1:
+            delay_ms = MAX_DELAY_MS;
+            is_speed_constant = 1;
+            speed = 0;
+            break;
+        case 2:
+            delay_ms = MAX_DELAY_MS;
+            is_speed_constant = 0;
+            speed = 0;
+            break;
+        case 3:
+            delay_ms = MIN_DELAY_MS;
+            is_speed_constant = 1;
+            speed = 0;
+            break;
+        default:
+            printf("Error: Invalid mode\n");
+            exit(1);
+            break;
+    }
 
     snake_len = 2;
     score = 0;
@@ -154,6 +195,7 @@ void try_to_eat()
         food_x = -1; food_y = -1; /* food was eaten */
         snake_len++;
         score++;
+        speed_up();
     }
 }
 
@@ -292,12 +334,50 @@ void print_table()
     }
 }
 
+int menu()
+{
+    int mode = 0;
+
+    printf( "Enter play mode:\n"
+            "1 - Easy\n"
+            "2 - Middle\n"
+            "3 - Hard\n"
+            "q - exit game\n" );
+
+    while(!mode)
+    {
+        char key = getchar();
+        getchar(); /* clear buffer */
+
+        switch(key)
+        {
+            case '1':
+                mode = 1;
+                break;
+            case '2':
+                mode = 2;
+                break;
+            case '3':
+                mode = 3;
+                break;
+            case 'q':
+                printf("Bye.\n");
+                exit(0);
+                break;
+            default:
+                printf( "Try again\n" );
+                break;
+        }
+    }
+
+    return mode;
+}
 
 int main()
 {
-    init_game();
+    int mode = menu();
 
-    int count = 0;
+    init_game( mode );
 
     while(1)
     {
@@ -317,7 +397,7 @@ int main()
 
         print_score();
 
-        msleep(200);
+        msleep( delay_ms );
     }
 
     return 0;
